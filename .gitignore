@@ -1,0 +1,14 @@
+# Python virtual environment
+venv/
+.venv/
+
+# Bytecode and temporary files
+__pycache__/
+*.pyc
+
+# IDE files
+.vscode/
+
+# Sensitive data and results
+apikey.env
+results/
