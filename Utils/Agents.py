@@ -13,7 +13,7 @@ from google.genai.errors import APIError
 # load_dotenv(dotenv_path='apikey.env')
 
 # Define Constants
-MODEL_NAME = "gemini-2.5-flash" 
+MODEL_NAME = "gemini-2.5-flash-lite" 
 MAX_TOKENS = 4096
 
 class Agent:
@@ -109,7 +109,7 @@ class Agent:
 )
 
         MAX_RETRIES = 3
-        RETRY_DELAY_SECONDS = 15 # Wait 5 seconds between retries
+        RETRY_DELAY_SECONDS = 15 # Wait 15 seconds between retries
 
         for attempt in range(MAX_RETRIES):
             try:

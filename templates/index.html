@@ -1,14 +1,64 @@
-<!doctype html>
-<title>AI Medical Diagnostics Agent</title>
-<h1>Upload Patient Medical Report</h1>
-
-<form method=post enctype=multipart/form-data>
-  <input type="file" name="file">
-  <input type="submit" value="Analyze Report">
-</form>
-
-<hr>
-<p>
-    This application runs a multi-agent AI pipeline (Cardiologist, Pulmonologist, Psychologist)
-    to generate an integrated diagnosis and treatment plan. Only TXT, PDF, DOC, or DOCX files are accepted.
-</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Diagnostic Pipeline - Upload</title>
+    <style>
+        /* Simple styling to center and frame the upload area */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f7f9; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .upload-container {
+            max-width: 600px;
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 { 
+            color: #007bff; 
+            margin-bottom: 20px;
+        }
+        input[type="file"] { 
+            display: block;
+            width: 100%;
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        input[type="submit"] {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        input[type="submit"]:hover { 
+            background-color: #218838; 
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h1>⬆️ Upload Medical Report for Analysis</h1>
+        <p>Please upload a patient's medical case report (TXT, PDF, DOCX) to start the multi-agent diagnostic pipeline.</p>
+        
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('analyze') }}">
+            <input type="file" name="file" accept=".txt,.pdf,.doc,.docx" required>
+            <input type="submit" value="Run AI Diagnosis">
+        </form>
+    </div>
+</body>
+</html>

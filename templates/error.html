@@ -1,5 +1,11 @@
 <!doctype html>
 <title>Error</title>
+
 <h1>Error Occurred</h1>
 <p>{{ message }}</p>
+
+{% if report_content %}
+<pre style="white-space: pre-wrap;">{{ report_content }}</pre>
+{% endif %}
+
 <p><a href="{{ url_for('upload_file') }}">Try Again</a></p>

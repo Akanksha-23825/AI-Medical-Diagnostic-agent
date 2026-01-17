@@ -1,21 +1,20 @@
-# app.py
-
-import os
 from flask import Flask, render_template, request, redirect, url_for
+import os
 from werkzeug.utils import secure_filename
-
-# Import your core pipeline function from main.py
+from dotenv import load_dotenv
 from main import run_multi_agent_analysis 
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION & ENVIRONMENT SETUP ---
+load_dotenv(dotenv_path='apikey.env') 
+print("Configuration: Environment variables loaded.")
+
 app = Flask(__name__)
 
 # Define the folder where uploaded reports will be temporarily stored
 UPLOAD_FOLDER = 'Medical Reports/uploaded'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# You can set a limit on file size if needed (e.g., 16 MB)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx'} # Only allow these file types
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx'} 
 
 def allowed_file(filename):
     """Checks if the file extension is allowed."""
@@ -24,79 +23,56 @@ def allowed_file(filename):
            
 # --- ROUTES ---
 
-@app.route('/', methods=['GET', 'POST'])
-def upload_file():
-    # If the user is just visiting the page (GET request)
-    if request.method == 'GET':
-        # 1. Render the HTML form for the user to upload a file
-        return render_template('index.html')
-        
-    # If the user submits the form (POST request)
-    if request.method == 'POST':
-        # Check if the file part is in the request
-        if 'file' not in request.files:
-            # If no file is selected, redirect back to the upload page
-            return redirect(request.url) 
-
-        file = request.files['file']
-
-        # If the user selects a file but leaves the name empty
-        if file.filename == '':
-            return redirect(request.url)
-
-        # Process the file if it exists and is allowed
-        if file and allowed_file(file.filename):
-            # 1. Securely save the filename to prevent path traversal issues
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # 2. Save the file
-            file.save(filepath)
-            
-            # 3. Process the file using your backend pipeline
-            print(f"--- Running pipeline for uploaded file: {filepath} ---")
-            final_report_path = run_multi_agent_analysis(filepath)
-            
-            # 4. Handle results and redirect to the display route
-            if final_report_path:
-                # Extract just the filename to pass to the results page
-                result_filename = os.path.basename(final_report_path)
-                return redirect(url_for('display_results', filename=result_filename))
-            else:
-                return render_template('error.html', message="Pipeline failed to generate the final report.")
-        
-        return render_template('error.html', message="Invalid file type. Please upload a TXT, PDF, DOC, or DOCX file.")
+@app.route("/", methods=["GET"])
+def index():
+    """Serves the file upload form (index.html)."""
+    return render_template("index.html")
 
 
-# Placeholder for the results route (to be implemented in Phase 2)
-@app.route('/results/<filename>')
-def display_results(filename):
-    """
-    Reads the content of the final diagnosis file and renders it on the results page.
-    """
-    # Construct the full path to the results file
-    # Note: We use "results" folder, which is where your pipeline saves reports
-    filepath = os.path.join("results", filename)
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    """Handles file upload, runs the pipeline, and displays results."""
+
+    # 1. Handle file retrieval and error checking
+    if "file" not in request.files: # The name attribute in index.html is 'file'
+        return render_template("results.html", error="No file part in the request.")
+
+    file = request.files["file"]
+
+    if file.filename == "":
+        return render_template("results.html", error="No selected file.")
+
+    if not allowed_file(file.filename):
+        return render_template("results.html", error="Invalid file type. Please upload a TXT, PDF, DOC, or DOCX file.")
+
+    # 2. Save the file
+    filename = secure_filename(file.filename)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
     
-    try:
-        # Read the content of the final report
-        with open(filepath, 'r', encoding='utf-8') as f:
-            report_content = f.read()
-        
-        # Pass the plain text report to the results.html template
-        return render_template('results.html', 
-                               filename=filename,
-                               report_content=report_content)
-        
-    except FileNotFoundError:
-        return render_template('error.html', 
-                               message=f"Error: The final report file '{filename}' was not found.")
-    except Exception as e:
-        return render_template('error.html', 
-                               message=f"An error occurred while reading the report: {e}")
+    print(f"--- Running pipeline for uploaded file: {filepath} ---")
+    
+    # 3. Run the Multi-Agent Pipeline
+    results = run_multi_agent_analysis(filepath)
+
+    if not results or "patient_report" not in results:
+        return render_template(
+            "results.html",
+            error="Failed to generate diagnosis. Check console logs for errors."
+        )
+
+    # 4. Display the simplified patient summary
+    return render_template(
+        "results.html",
+        patient_report=results["patient_report"]
+    )
+
 
 # --- EXECUTION BLOCK ---
 if __name__ == '__main__':
-    # Ensure the upload folder exists when the app starts
+    # Ensure necessary directories exist
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    app.run(debug=True) # Run the Flask development server
+    os.makedirs("results", exist_ok=True) 
+    
+    app.run(debug=True)
