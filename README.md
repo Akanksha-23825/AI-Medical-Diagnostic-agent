@@ -16,7 +16,7 @@ It is **not intended for clinical use**.
 - Added **MIT License**  
 - Fixed bugs and updated `requirements.txt`  
 - Added `.gitignore`  
-- Upgraded core LLM to **GPT-5**  
+- Upgraded core LLM to **Gemini-flash**  
 
 ---
 
@@ -66,7 +66,7 @@ The outputs are then combined and summarized into **three possible health issues
     - Create a file named apikey.env in the project root.
     - Add your OpenAI (or other LLM provider) credentials:
     ```bash
-    OPENAI_API_KEY=your_api_key_here
+   GEMINI_API_KEY=your_api_key
     ```
 4. **Run the system:** `python main.py`
 ---
