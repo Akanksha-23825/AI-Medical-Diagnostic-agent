@@ -1,20 +1,91 @@
 import os
+import json
+import glob
 import concurrent.futures
+from dotenv import load_dotenv
 from Utils.Agents import Cardiologist, Psychologist, Pulmonologist, MultidisciplinaryTeam
-from google import genai 
+from google import genai
 
-# ---------------- CONFIG ---------------- #
+load_dotenv(dotenv_path='apikey.env', override=True)
+
 client = genai.Client()
 RESULTS_DIR = "results"
+CACHE_DIR = "cache"
 os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-# For local testing only (Ensure this path exists if you run locally)
 medical_report_path_placeholder = os.path.join(
     "Medical Reports",
     "Medical Report - Laura Garcia - Rheumatoid Arthritis.txt"
 )
 
-# ---------------- UTILITY FUNCTIONS ---------------- #
+def cache_path_for(filename):
+    safe = filename.replace(".txt", "").replace(".pdf", "").replace(".doc", "").replace(".docx", "")
+    return os.path.join(CACHE_DIR, f"{safe}.json")
+
+def save_cache(filename, data):
+    try:
+        with open(cache_path_for(filename), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("Cache save failed:", e)
+
+def load_cache(filename):
+    try:
+        path = cache_path_for(filename)
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print("Cache load failed:", e)
+        return None
+
+def looks_like_error(text):
+    if not text:
+        return True
+    lower = text.lower()
+    return "unable to" in lower or "error" in lower or "cannot" in lower or "quota" in lower
+
+def rebuild_cache_from_results():
+    bases = set()
+
+    def base_from_filename(path):
+        name = os.path.basename(path)
+        for suffix in [
+            "_patient_summary.txt",
+            "_internal_mdt_report.txt",
+            "_cardiologist_report.txt",
+            "_psychologist_report.txt",
+            "_pulmonologist_report.txt",
+        ]:
+            if name.endswith(suffix):
+                return name.replace(suffix, "")
+        return None
+
+    def read_if_exists(path):
+        return open(path, "r", encoding="utf-8").read() if os.path.exists(path) else ""
+
+    for f in glob.glob(os.path.join(RESULTS_DIR, "*.txt")):
+        base = base_from_filename(f)
+        if base:
+            bases.add(base)
+
+    for base in bases:
+        data = {
+            "final_report_path": os.path.join(RESULTS_DIR, f"{base}_patient_summary.txt"),
+            "raw_mdt_report_path": os.path.join(RESULTS_DIR, f"{base}_internal_mdt_report.txt"),
+            "raw_mdt_report": read_if_exists(os.path.join(RESULTS_DIR, f"{base}_internal_mdt_report.txt")),
+            "patient_report": read_if_exists(os.path.join(RESULTS_DIR, f"{base}_patient_summary.txt")),
+            "immediate_steps": [],
+            "followup_steps": [],
+            "cardiologist_report": read_if_exists(os.path.join(RESULTS_DIR, f"{base}_cardiologist_report.txt")),
+            "psychologist_report": read_if_exists(os.path.join(RESULTS_DIR, f"{base}_psychologist_report.txt")),
+            "pulmonologist_report": read_if_exists(os.path.join(RESULTS_DIR, f"{base}_pulmonologist_report.txt")),
+        }
+
+        if not looks_like_error(data["patient_report"]):
+            save_cache(base, data)
 
 def load_medical_report(file_path):
     try:
@@ -23,7 +94,6 @@ def load_medical_report(file_path):
     except Exception as e:
         print(f"Error reading file: {e}")
         return None
-
 
 def save_report(file_name, content, header=""):
     try:
@@ -34,7 +104,6 @@ def save_report(file_name, content, header=""):
             f.write(content)
     except Exception as e:
         print(f"Error saving file {file_name}: {e}")
-
 
 def run_specialist_agent(agent_class, medical_report, base_filename):
     print(f"{agent_class.__name__} is running...")
@@ -47,11 +116,7 @@ def run_specialist_agent(agent_class, medical_report, base_filename):
 
     return report_content
 
-
-# ---------------- PATIENT SUMMARY (NEW + CRITICAL for concise output) ---------------- #
-
 def generate_patient_summary(full_mdt_report):
-    """Generates a short, non-technical summary of the MDT report."""
     print("Generating patient summary...")
     prompt = f"""
 You are a medical assistant.
@@ -76,19 +141,62 @@ Medical information:
 
     return response.text.strip()
 
+def generate_steps_split(full_mdt_report):
+    prompt = f"""
+You are a clinical assistant.
 
-# ---------------- MAIN PIPELINE ---------------- #
+From the information below, produce TWO separate bullet lists:
+
+1) Immediate Steps (actions to do now or within days)
+2) Follow-up Steps (actions for later weeks/months)
+
+Rules:
+- Each item must be short and action-focused.
+- Immediate Steps: exactly 3 bullets.
+- Follow-up Steps: 3 to 5 bullets.
+- No medical jargon.
+- Do not repeat items.
+- Do not include headings, only bullets.
+
+Medical info:
+{full_mdt_report}
+"""
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+
+    text = response.text.strip().splitlines()
+    immediate, followup = [], []
+    current = "immediate"
+
+    for line in text:
+        clean = line.strip()
+        if not clean:
+            continue
+        if "immediate" in clean.lower():
+            current = "immediate"
+            continue
+        if "follow" in clean.lower():
+            current = "followup"
+            continue
+        if clean.startswith("-") or clean.startswith("•"):
+            clean = clean[1:].strip()
+        if current == "immediate":
+            immediate.append(clean)
+        else:
+            followup.append(clean)
+
+    return immediate[:3], followup[:5]
 
 def run_multi_agent_analysis(input_medical_report_path: str):
-
-    # 1. Load report
     medical_report = load_medical_report(input_medical_report_path)
     if not medical_report:
         return None
 
     base_filename = os.path.basename(input_medical_report_path)
 
-    # 2. Run specialist agents concurrently
     specialist_agents = [Cardiologist, Psychologist, Pulmonologist]
     specialist_outputs = {}
 
@@ -109,7 +217,16 @@ def run_multi_agent_analysis(input_medical_report_path: str):
     psychologist_report = specialist_outputs.get("psychologist", "")
     pulmonologist_report = specialist_outputs.get("pulmonologist", "")
 
-    # 3. MDT Agent
+    if (
+        looks_like_error(cardiologist_report) or
+        looks_like_error(psychologist_report) or
+        looks_like_error(pulmonologist_report)
+    ):
+        cached = load_cache(base_filename)
+        if cached and not looks_like_error(cached.get("patient_report", "")):
+            print("API error detected — using cached results.")
+            return cached
+
     print("MultidisciplinaryTeam is running...")
     mdt_agent = MultidisciplinaryTeam(
         cardiologist_report=cardiologist_report,
@@ -119,31 +236,45 @@ def run_multi_agent_analysis(input_medical_report_path: str):
 
     final_mdt_report = mdt_agent.run()
 
-    if not final_mdt_report:
+    if not final_mdt_report or looks_like_error(final_mdt_report):
+        cached = load_cache(base_filename)
+        if cached and not looks_like_error(cached.get("patient_report", "")):
+            print("MDT error detected — using cached results.")
+            return cached
         return None
 
-    # 4. Save INTERNAL doctor report
     internal_filename = f"{base_filename.replace('.txt', '')}_internal_mdt_report.txt"
     save_report(internal_filename, final_mdt_report, "Multidisciplinary Team Report (Internal)")
 
-    # 5. Generate PATIENT SUMMARY
     patient_summary = generate_patient_summary(final_mdt_report)
+    immediate_steps, followup_steps = generate_steps_split(final_mdt_report)
+
+    if not followup_steps:
+        summary_lines = [l.strip("-•* ").strip() for l in patient_summary.split("\n") if l.strip()]
+        followup_steps = summary_lines[3:6]
 
     patient_filename = f"{base_filename.replace('.txt', '')}_patient_summary.txt"
     save_report(patient_filename, patient_summary, "Patient Summary (Frontend)")
 
-    # 6. RETURN DATA TO FLASK
-    return {
+    result_payload = {
         "final_report_path": os.path.join(RESULTS_DIR, patient_filename),
-        "raw_mdt_report": final_mdt_report,       # doctor-only
-        "patient_report": patient_summary,         # frontend
+        "raw_mdt_report_path": os.path.join(RESULTS_DIR, internal_filename),
+        "raw_mdt_report": final_mdt_report,
+        "patient_report": patient_summary,
+        "immediate_steps": immediate_steps,
+        "followup_steps": followup_steps,
         "cardiologist_report": cardiologist_report,
         "pulmonologist_report": pulmonologist_report,
         "psychologist_report": psychologist_report
     }
 
+    if not looks_like_error(result_payload["patient_report"]):
+        save_cache(base_filename, result_payload)
+        rebuild_cache_from_results()
+    else:
+        print("Skipping cache save (error-like response).")
 
-# ---------------- LOCAL TESTING ---------------- #
+    return result_payload
 
 if __name__ == "__main__":
     print("Running local test...")

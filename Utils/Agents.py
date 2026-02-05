@@ -1,159 +1,146 @@
 from langchain_core.prompts import PromptTemplate
 import os
-# --- NEW IMPORTS FOR AUTH AND MODERN API ---
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types 
-import time 
+from google.genai import types
+import time
 from google.genai.errors import APIError
-# --------------------------------------------
 
-# Load environment variables at the top level
-# CRITICAL: Use the GEMINI_API_KEY variable and load the apikey.env file
-# load_dotenv(dotenv_path='apikey.env')
+# Load environment variables
+load_dotenv(dotenv_path='apikey.env', override=True)
 
-# Define Constants
-MODEL_NAME = "gemini-2.5-flash-lite" 
+MODEL_NAME = "gemini-2.5-flash-lite"
 MAX_TOKENS = 4096
 
 class Agent:
-    """
-    Base Agent class for doctors or multidisciplinary team.
-    Handles prompt creation and execution with the Gemini API.
-    """
     def __init__(self, medical_report=None, role=None, extra_info=None):
         self.medical_report = medical_report
         self.role = role
         self.extra_info = extra_info or {}
-        # The prompt template is created *after* the role is set
-        
-        # CRITICAL FIX 1: API Key and Client Initialization
+
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            # Note: This error likely points to the root of the 403 issue if the key file is present
-            raise ValueError("GEMINI_API_KEY is not set. Please check apikey.env and load_dotenv setup.")
-            
-        # Use the modern Client initialization
+            raise ValueError("GEMINI_API_KEY is not set. Please check apikey.env.")
+
         self.client = genai.Client(api_key=api_key)
-        
-        # Call create_prompt_template here
         self.prompt_template = self.create_prompt_template()
 
-
     def create_prompt_template(self):
-        
-        # --- MULTIDISCIPLINARY TEAM PROMPT (Synthesis) ---
         if self.role == "MultidisciplinaryTeam":
             templates = """
-                Act as a Multidisciplinary Team of healthcare professionals. You will receive specialized reports from the Cardiologist, Psychologist, and Pulmonologist based on the patient's case.
+Act as a Multidisciplinary Team of healthcare professionals. 
+Review and synthesize the reports from the Cardiologist, Psychologist, and Pulmonologist.
 
-                Task: Review and synthesize ALL three specialist reports. Your output must be a holistic, integrated final report.
+Task: Create a BALANCED summary of the findings. 
+It should be detailed enough to explain the 'Why', but clear enough not to overwhelm the patient.
 
-                1. **Final Diagnosis:** Provide a list of 3 possible health issues for the patient, prioritized by likelihood, based on the combined evidence. For each issue, provide a brief reason referencing the specialist reports.
-                2. **Integrated Treatment Plan:** Provide a detailed, integrated, bulleted Treatment and Management Plan. This plan must combine recommendations for medication, therapy, and lifestyle changes derived from all three specialist assessments.
+1. **Primary Observations:** Provide the top 3 prioritized health insights. For each, give a clear reason referencing the specialist reports in 1-2 sentences.
+2. **Essential Care Plan:** Provide a bulleted list of the most important next steps (medication, lifestyle, or tests). Focus only on actionable items.
 
-                Just return the final diagnosis list followed immediately by the Integrated Treatment Plan.
+Style Guidelines:
+- Use professional but supportive language.
+- Avoid extremely dense medical jargon where a simpler term suffices.
+- Keep the total length under 300 words.
 
-                Cardiologist Report: {cardiologist_report}
-                Psychologist Report: {psychologist_report}
-                Pulmonologist Report: {pulmonologist_report}
-            """
+Cardiologist Report: {cardiologist_report}
+Psychologist Report: {psychologist_report}
+Pulmonologist Report: {pulmonologist_report}
+"""
             return PromptTemplate.from_template(templates)
 
-        # --- SPECIALIST AGENTS PROMPTS (Generalization Fix) ---
-        else: 
+        else:
             templates = {
-                # General Prompt for Cardiologist
                 "Cardiologist": """
-                Act as an expert Cardiologist. Your sole task is to analyze the provided medical report, focusing ONLY on the cardiovascular system (heart, blood vessels, and blood pressure).
+Act as an expert Cardiologist.
 
-                1. Assess for any signs of primary cardiac conditions (e.g., arrhythmia, hypertension) or cardiac risks associated with the patient's primary complaints (e.g., inflammation).
-                2. Provide a provisional assessment of the cardiac state and identify potential issues.
-                3. List 3 specific, relevant next diagnostic steps, such as specific cardiac tests (e.g., ECG, echocardiogram, Holter monitor).
-                Medical Report: {medical_report}
-                """,
-                
-                # General Prompt for Psychologist
+Rules:
+- Start with "Key Findings:" and provide EXACTLY 3 bullet points.
+- No introductions, no role descriptions.
+- Each bullet must be a specific clinical finding or risk.
+- Use plain language where possible.
+
+Medical Report: {medical_report}
+""",
                 "Psychologist": """
-                Act as an expert Psychologist. Your sole task is to analyze the provided medical report, focusing ONLY on the mental and behavioral health status of the patient, including stress, anxiety, mood, and cognitive issues.
+Act as an expert Psychologist.
 
-                1. Assess for any signs of primary psychological disorders, including generalized anxiety, panic disorder, depression, or somatization.
-                2. Provide a provisional assessment of the patient's mental health status and identify significant stressors or behavioral risk factors.
-                3. List 3 specific, relevant next diagnostic steps, such as specific psychological tests or therapy recommendations (e.g., CBT referral).
-                Medical Report: {medical_report}
-                """,
-                
-                # General Prompt for Pulmonologist
+Rules:
+- Start with "Key Findings:" and provide EXACTLY 3 bullet points.
+- No introductions, no role descriptions.
+- Each bullet must be a specific psychological finding or risk.
+- Use plain language where possible.
+
+Medical Report: {medical_report}
+""",
                 "Pulmonologist": """
-                Act as an expert Pulmonologist. Your sole task is to analyze the provided medical report, focusing ONLY on the respiratory system (lungs, airways, breathing).
+Act as an expert Pulmonologist.
 
-                1. Assess for any signs of primary pulmonary conditions, including asthma, COPD, infection, or respiratory manifestations of systemic disease.
-                2. Provide a provisional assessment of the respiratory state and identify potential issues like hyperventilation or abnormal gas exchange.
-                3. List 3 specific, relevant next diagnostic steps, such as specific lung function tests (e.g., spirometry) or imaging (e.g., chest X-ray).
-                Medical Report: {medical_report}
-                """
+Rules:
+- Start with "Key Findings:" and provide EXACTLY 3 bullet points.
+- No introductions, no role descriptions.
+- Each bullet must be a specific respiratory finding or risk.
+- Use plain language where possible.
+
+Medical Report: {medical_report}
+"""
             }
             return PromptTemplate.from_template(templates[self.role])
 
-
-
-
     def run(self):
         print(f"{self.role} is running...")
-        
+
         prompt = self.prompt_template.format(
-        medical_report=self.medical_report or '',
-        cardiologist_report=self.extra_info.get('cardiologist_report', ''),
-        psychologist_report=self.extra_info.get('psychologist_report', ''),
-        pulmonologist_report=self.extra_info.get('pulmonologist_report', '')
-)
+            medical_report=self.medical_report or '',
+            cardiologist_report=self.extra_info.get('cardiologist_report', ''),
+            psychologist_report=self.extra_info.get('psychologist_report', ''),
+            pulmonologist_report=self.extra_info.get('pulmonologist_report', '')
+        )
 
         MAX_RETRIES = 3
-        RETRY_DELAY_SECONDS = 15 # Wait 15 seconds between retries
+        RETRY_DELAY_SECONDS = 15
 
         for attempt in range(MAX_RETRIES):
             try:
                 response = self.client.models.generate_content(
-                    model=MODEL_NAME, 
-                    contents=[prompt], 
+                    model=MODEL_NAME,
+                    contents=[prompt],
                     config=types.GenerateContentConfig(
-                        max_output_tokens=MAX_TOKENS, 
-                        temperature=0.2 
+                        max_output_tokens=MAX_TOKENS,
+                        temperature=0.2
                     )
                 )
-                return response.text # Success! Return the response.
-                
+                return response.text
+
             except APIError as e:
-                # Check specifically for 503 errors
                 if "503 UNAVAILABLE" in str(e) and attempt < MAX_RETRIES - 1:
-                    print(f"[{self.role}] Attempt {attempt + 1} failed (503 UNAVAILABLE). Retrying in {RETRY_DELAY_SECONDS} seconds...")
+                    print(f"[{self.role}] Attempt {attempt + 1} failed (503 UNAVAILABLE). Retrying...")
                     time.sleep(RETRY_DELAY_SECONDS)
-                    continue # Go to the next attempt
+                    continue
                 else:
-                    # If it's a permanent error (like 403 or 400) or last retry failed, raise the error
                     print(f"Error occurred in {self.role} after {attempt + 1} attempts:", e)
                     return f"Error: {e}"
-            
+
             except Exception as e:
-                # Catch other, non-API-specific errors
                 print(f"Non-API Error occurred in {self.role}:", e)
                 return f"Error: {e}"
-        
-        # Should be unreachable, but good practice
+
         return "Error: Failed to generate content after all retries."
 
-# Define specialized agent classes (remain unchanged)
+
 class Cardiologist(Agent):
     def __init__(self, medical_report):
         super().__init__(medical_report, "Cardiologist")
+
 
 class Psychologist(Agent):
     def __init__(self, medical_report):
         super().__init__(medical_report, "Psychologist")
 
+
 class Pulmonologist(Agent):
     def __init__(self, medical_report):
         super().__init__(medical_report, "Pulmonologist")
+
 
 class MultidisciplinaryTeam(Agent):
     def __init__(self, cardiologist_report, psychologist_report, pulmonologist_report):

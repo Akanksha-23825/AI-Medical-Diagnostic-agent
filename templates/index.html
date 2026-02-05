@@ -2,63 +2,79 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AI Diagnostic Pipeline - Upload</title>
-    <style>
-        /* Simple styling to center and frame the upload area */
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: #f4f7f9; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .upload-container {
-            max-width: 600px;
-            background-color: #fff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-        h1 { 
-            color: #007bff; 
-            margin-bottom: 20px;
-        }
-        input[type="file"] { 
-            display: block;
-            width: 100%;
-            margin: 20px 0;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        input[type="submit"] {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1.1em;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        input[type="submit"]:hover { 
-            background-color: #218838; 
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Medical Review — Upload</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <div class="upload-container">
-        <h1>⬆️ Upload Medical Report for Analysis</h1>
-        <p>Please upload a patient's medical case report (TXT, PDF, DOCX) to start the multi-agent diagnostic pipeline.</p>
-        
-        <form method="post" enctype="multipart/form-data" action="{{ url_for('analyze') }}">
-            <input type="file" name="file" accept=".txt,.pdf,.doc,.docx" required>
-            <input type="submit" value="Run AI Diagnosis">
-        </form>
+<body class="landing">
+    <div class="landing-shell">
+        <header class="landing-header">
+            <div class="brand">
+                <div class="brand-mark">M</div>
+                <div class="brand-name">MedixWeb</div>
+            </div>
+            <button class="ghost-button">Book Appointment</button>
+        </header>
+
+        <main class="landing-hero">
+            <section class="hero-content">
+                <div class="trust-pill">
+                    <span class="dot"></span>
+                    Trusted by 100+ demo users
+                </div>
+                <h1>Your Trusted Partner in Modern Healthcare</h1>
+                <p class="hero-subtitle">
+                    Upload a patient case report and get a structured, multi‑agent clinical summary.
+                </p>
+
+                <form class="hero-form" method="post" enctype="multipart/form-data" action="{{ url_for('analyze') }}">
+                    <label class="file-field wide">
+                        <input type="file" name="file" accept=".txt,.pdf,.doc,.docx" required>
+                        <span class="file-button">Choose File</span>
+                        <span class="file-text">No file selected</span>
+                    </label>
+                    <button class="primary-button large" type="submit">Run AI Diagnosis</button>
+                </form>
+
+                <div class="hero-metrics">
+                    <div class="metric-card">
+                        <p class="metric-title">Trusted Care Rate</p>
+                        <p class="metric-value">97%</p>
+                        <p class="metric-note">Accuracy on curated demo cases</p>
+                    </div>
+                    <div class="metric-list">
+                        <span>Personalized</span>
+                        <span>Reliable</span>
+                        <span>Secure</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="hero-visual">
+                <img
+                    class="hero-image"
+                    src="https://images.unsplash.com/photo-1504813184591-01572f98c85f?q=80&w=1200&auto=format&fit=crop"
+                    alt="Healthcare team with patient"
+                />
+                <div class="hero-card">
+                    <h3>Comprehensive Care</h3>
+                    <p>Integrated specialist insights for accurate clinical summaries.</p>
+                </div>
+            </section>
+        </main>
     </div>
+
+    <script>
+        const input = document.querySelector('input[type="file"]');
+        const label = document.querySelector('.file-text');
+        if (input && label) {
+            input.addEventListener('change', () => {
+                label.textContent = input.files.length ? input.files[0].name : 'No file selected';
+            });
+        }
+    </script>
 </body>
 </html>

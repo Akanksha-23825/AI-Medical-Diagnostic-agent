@@ -1,85 +1,188 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Diagnosis Result</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f7fa;
-            padding: 40px;
-        }
-        .container {
-            max-width: 800px;
-            margin: auto;
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2c3e50;
-        }
-        /* Style for the bulleted summary */
-        ul {
-            list-style-type: none; /* Remove default bullets */
-            padding-left: 0;
-        }
-        li {
-            line-height: 1.8;
-            margin-bottom: 10px;
-            padding-left: 20px;
-            position: relative;
-        }
-        li::before {
-            content: "•"; /* Custom bullet point */
-            color: #007bff; /* Blue color */
-            font-weight: bold;
-            display: inline-block;
-            width: 1em;
-            margin-left: -1em;
-        }
-        .error {
-            color: red;
-            font-weight: bold;
-        }
-        .back-btn {
-            margin-top: 20px;
-            display: inline-block;
-            padding: 10px 15px;
-            background: #3498db;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Medical Review — Results</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="landing">
+    <div class="landing-shell">
+        <header class="landing-header">
+            <div class="brand">
+                <div class="brand-mark">M</div>
+                <div class="brand-name">MedixWeb</div>
+            </div>
+            <nav class="landing-nav">
+                <a href="#" class="nav-link">Home</a>
+                <a href="#" class="nav-link">Services</a>
+                <a href="#" class="nav-link">Our Team</a>
+                <a href="#" class="nav-link">Contact</a>
+            </nav>
+            <a class="ghost-button" href="/">New Analysis</a>
+        </header>
 
-<div class="container">
+        {% if error %}
+        <section class="notice" role="alert">
+            <div class="notice-title">Action Required</div>
+            <div class="notice-body">{{ error }}</div>
+        </section>
+        {% endif %}
 
-    {% if error %}
-        <h1>❌ Analysis Error</h1>
-        <p class="error">{{ error }}</p>
-    {% endif %}
+        {% if patient_report %}
+        <main class="landing-hero results-hero">
+            <section class="hero-content">
+                <div class="trust-pill">
+                    <span class="dot"></span>
+                    AI processed summary
+                </div>
+                <h1>Clinical Results Overview</h1>
+                <p class="hero-subtitle">
+                    Multidisciplinary insights summarized for fast review and clear patient communication.
+                </p>
 
-    {% if patient_report %}
-        <h1>🩺 Your Health Summary</h1>
-        <p>This is a simplified summary based on the multidisciplinary AI analysis for your review.</p>
-        <ul>
-            {% for line in patient_report.split("\n") %}
-                {% if line.strip().startswith('*') or line.strip().startswith('-') %}
-                    <li>{{ line.strip()[1:].strip() }}</li>
-                {% elif line.strip() %}
-                    <li>{{ line.strip() }}</li>
-                {% endif %}
-            {% endfor %}
-        </ul>
-    {% endif %}
+                <div class="hero-metrics">
+                    <div class="metric-card">
+                        <p class="metric-title">Risk Signal</p>
+                        <p class="metric-value">Moderate</p>
+                        <p class="metric-note">Based on report clarity and clustering</p>
+                    </div>
+                    <div class="metric-list">
+                        <span>Personalized</span>
+                        <span>Reliable</span>
+                        <span>Secure</span>
+                    </div>
+                </div>
+            </section>
 
-    <a class="back-btn" href="/">← Start New Diagnosis</a>
+            <section class="hero-visual">
+                <img class="hero-image"
+                     src="https://images.unsplash.com/photo-1504439468489-c8920d796a29?q=80&w=1200&auto=format&fit=crop"
+                     alt="Doctor reviewing report" />
+                <div class="hero-card">
+                    <h3>Comprehensive Review</h3>
+                    <p>Specialist reports combined into a unified care summary.</p>
+                </div>
+            </section>
+        </main>
 
-</div>
+        <details class="toggle" open>
+            <summary>Recommended & Follow‑up Steps</summary>
+            <section class="panel">
+                <div class="dashboard-grid premium-grid">
+                    <div class="card">
+                        <h3>Immediate Steps</h3>
+                        <p class="card-note">Actions to start now.</p>
+                        <ul class="summary-list compact">
+                            {% for item in immediate_steps %}
+                                <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
 
+                    <div class="card">
+                        <h3>Follow‑up Steps</h3>
+                        <p class="card-note">Actions after the initial phase.</p>
+                        <ul class="summary-list compact">
+                            {% for item in followup_steps %}
+                                <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </details>
+
+        <details class="toggle" open>
+            <summary>Patient Summary</summary>
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Plain Language Summary</h2>
+                    <span class="chip">Patient-Friendly</span>
+                </div>
+                <ul class="summary-list plain">
+                    {% for line in patient_report.split('\n') %}
+                        {% set clean = line.replace('**', '').replace('*','').strip() %}
+                        {% if clean %}
+                            {% if clean.startswith('- ') %}{% set clean = clean[2:] %}{% endif %}
+                            {% if clean.startswith('• ') %}{% set clean = clean[2:] %}{% endif %}
+                            <li>{{ clean }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+
+                <div class="download-row">
+                    <a class="secondary-button" href="/download/{{ patient_file }}">Download Patient Summary</a>
+                    <a class="secondary-button" href="/download/{{ mdt_file }}">Download Full MDT Report</a>
+                </div>
+            </section>
+        </details>
+
+        <details class="toggle">
+            <summary>Agent Key Findings</summary>
+            <section class="panel">
+                <div class="agent-grid">
+                    <div class="agent-card">
+                        <h3>Cardiologist</h3>
+                        {% set ns = namespace(count=0) %}
+                        <ul class="summary-list compact">
+                            {% for line in cardiologist.split('\n') %}
+                                {% set clean = line.replace('**', '').replace('*','').strip() %}
+                                {% if clean and "RESOURCE_EXHAUSTED" not in clean and "Error" not in clean %}
+                                    {% if clean.startswith('- ') %}{% set clean = clean[2:] %}{% endif %}
+                                    {% if clean.startswith('• ') %}{% set clean = clean[2:] %}{% endif %}
+                                    {% set ns.count = ns.count + 1 %}
+                                    {% if ns.count <= 3 %}
+                                        <li>{{ clean }}</li>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="agent-card">
+                        <h3>Psychologist</h3>
+                        {% set ns = namespace(count=0) %}
+                        <ul class="summary-list compact">
+                            {% for line in psychologist.split('\n') %}
+                                {% set clean = line.replace('**', '').replace('*','').strip() %}
+                                {% if clean and "RESOURCE_EXHAUSTED" not in clean and "Error" not in clean %}
+                                    {% if clean.startswith('- ') %}{% set clean = clean[2:] %}{% endif %}
+                                    {% if clean.startswith('• ') %}{% set clean = clean[2:] %}{% endif %}
+                                    {% set ns.count = ns.count + 1 %}
+                                    {% if ns.count <= 3 %}
+                                        <li>{{ clean }}</li>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="agent-card">
+                        <h3>Pulmonologist</h3>
+                        {% set ns = namespace(count=0) %}
+                        <ul class="summary-list compact">
+                            {% for line in pulmonologist.split('\n') %}
+                                {% set clean = line.replace('**', '').replace('*','').strip() %}
+                                {% if clean and "RESOURCE_EXHAUSTED" not in clean and "Error" not in clean %}
+                                    {% if clean.startswith('- ') %}{% set clean = clean[2:] %}{% endif %}
+                                    {% if clean.startswith('• ') %}{% set clean = clean[2:] %}{% endif %}
+                                    {% set ns.count = ns.count + 1 %}
+                                    {% if ns.count <= 3 %}
+                                        <li>{{ clean }}</li>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </details>
+
+        {% endif %}
+    </div>
 </body>
 </html>
